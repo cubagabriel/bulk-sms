@@ -1,0 +1,66 @@
+services:
+    front:
+        image: 10.30.7.60:30995/bulk_sms/http_server:latest
+        ports:
+            - 443:443
+            - 5557:5557
+            - 5558:5558
+            - 5559:5559
+            - 6000:6000
+            - 6001:6001
+            - 6002:6002
+        volumes:
+            - ./cluster_config:/app/config
+            - ./input:/app/data/input
+            - ./result:/app/data/output
+        deploy:
+            restart_policy:
+                condition: on-failure
+                delay: "5s"
+                max_attempts: 10
+                window: "120s"
+        logging:
+            driver: "json-file"
+            options:
+                max-file: "5"
+                max-size: "10m"
+        environment:
+          - TZ=America/Lima
+    worker_normal:
+        image: 10.30.7.60:30995/bulk_sms/smpp_worker:latest
+        environment:
+          - SMPP_WORKER_GROUP=normal
+          - TZ=America/Lima
+        volumes:
+            - ./cluster_config:/app/config
+        deploy:
+          mode: replicated
+          replicas: 2
+          restart_policy:
+              condition: on-failure
+              delay: "5s"
+              window: "120s"
+        logging:
+          driver: "json-file"
+          options:
+            max-file: "5"
+            max-size: "10m"
+    worker_high:
+        image: 10.30.7.60:30995/bulk_sms/smpp_worker:latest
+        environment:
+          - SMPP_WORKER_GROUP=high
+          - TZ=America/Lima
+        volumes:
+            - ./cluster_config:/app/config
+        deploy:
+          mode: replicated
+          replicas: 1
+          restart_policy:
+            condition: on-failure
+            delay: "5s"
+            window: "120s"
+        logging:
+          driver: "json-file"
+          options:
+            max-file: "5"
+            max-size: "10m"

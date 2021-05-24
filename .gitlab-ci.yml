@@ -1,0 +1,59 @@
+# 1. Create an application image
+# 2. Run tests against the created image
+# 3. Push image to a remote registry
+# 4. Deploy to a server from the pushed image
+
+stages:
+  - build
+  - test
+  - push
+  - deploy
+
+# see usage of Namespaces at https://docs.gitlab.com/ee/user/group/#namespaces
+variables:
+  REGISTRY_GROUP_PROJECT: $CI_REGISTRY/bulk_sms
+
+build-image:
+  stage: build
+  # the tag 'shell' advices only GitLab runners using this tag to pick up that job
+  tags:
+    - shell
+  script:
+    - docker build --build-arg HTTPS_PROXY=$https_proxy --tag $REGISTRY_GROUP_PROJECT/http_server:latest ./https_server
+    - docker build --build-arg HTTPS_PROXY=$https_proxy --tag $REGISTRY_GROUP_PROJECT/smpp_worker:latest ./smpp_worker
+
+test-image:
+  stage: test
+  tags:
+    - shell
+  before_script:
+    - mkdir input && mkdir result
+    - python3.6 setup_ip.py
+    - docker-compose up -d
+    - sleep 5
+  script:
+    - python3.6 tests/integration_test.py
+  after_script:
+    - docker-compose down
+    - rm -rf input && rm -rf result
+
+push-image:
+  stage: push
+  tags:
+    - shell
+  script:
+    - docker push $REGISTRY_GROUP_PROJECT/http_server:latest
+    - docker push $REGISTRY_GROUP_PROJECT/smpp_worker:latest
+
+deploy-image:
+  stage: deploy
+  tags:
+    - shell
+  before_script:
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$SSH_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+    - 'echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+  script:
+    - scp PROD_docker-compose.yml setup_prod.sh setup_ip.py cluster_config/PROD_global_config.ini user@$PROD_SERVER_IP:./
+    - ssh user@$PROD_SERVER_IP "chmod +x setup_prod.sh && sudo ./setup_prod.sh"

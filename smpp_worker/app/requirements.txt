@@ -1,0 +1,4 @@
+requests==2.24.0
+smpplib==2.1.0
+urllib3==1.25.11
+pyzmq>=20.0.0
